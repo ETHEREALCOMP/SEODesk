@@ -1,0 +1,81 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build folders
+[Bb]in/
+[Oo]bj/
+out/
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# dotnet
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+.nuget/
+packages/
+**/packages/*
+
+# Publish output
+publish/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.mdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker / Visual Studio generated files
+obj/Docker/
+obj/**/docker-compose*.g.yml
+obj/**/docker-compose.vs.debug.*.yml
+obj/**/docker-compose.vs.release.*.yml
+obj/**/Dockerfile*
+
+# User secrets and local settings (do not commit secrets)
+secrets.json
+appsettings.*.Local.json
+appsettings.*.Secrets.json
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Test results
+TestResults/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage
+coverage/
+
+# IDE workspace files
+*.code-workspace
+
+# Ignore sensitive environment files
+.env
+.env.*
