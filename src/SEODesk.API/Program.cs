@@ -85,6 +85,10 @@ builder.Services.AddCors(options =>
 });
 
 // Authentication
+
+var googleClientId = builder.Configuration["Google:ClientId"];
+var googleClientSecret = builder.Configuration["Google:ClientSecret"];
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey missing");
@@ -92,9 +96,9 @@ var secretKey = jwtSettings["SecretKey"]
 builder.Services
     .AddAuthentication(options =>
     {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
@@ -123,8 +127,8 @@ builder.Services
     })
     .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
     {
-        options.ClientId = builder.Configuration["Google:ClientId"]!;
-        options.ClientSecret = builder.Configuration["Google:ClientSecret"]!;
+        options.ClientId = googleClientId!;
+        options.ClientSecret = googleClientSecret!;
         options.CallbackPath = "/api/auth/callback";
         options.SaveTokens = true;
 

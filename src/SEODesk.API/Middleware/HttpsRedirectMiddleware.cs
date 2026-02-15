@@ -11,11 +11,9 @@ public class HttpsRedirectMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!context.Request.IsHttps &&
-            !string.IsNullOrEmpty(context.Request.Headers["X-Forwarded-Proto"]) &&
-            context.Request.Headers["X-Forwarded-Proto"] != "https")
+        if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto))
         {
-            context.Request.Scheme = "https";
+            context.Request.Scheme = proto;
         }
 
         await _next(context);
