@@ -5,13 +5,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using SEODesk.Domain.Entities;
 using SEODesk.Infrastructure.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using static System.Net.WebRequestMethods;
+using Microsoft.IdentityModel.Tokens;
 
 namespace SEODesk.API.Controllers;
 
@@ -36,21 +35,19 @@ public class AuthController : ControllerBase
     [HttpGet("signin-google")]
     public IActionResult SignInGoogle()
     {
-        var properties = new AuthenticationProperties
-        {
-            RedirectUri = "api/auth/callback"
-        };
+        // ✅ НЕ ВКАЗУВАТИ RedirectUri - нехай middleware сам визначить
+        var properties = new AuthenticationProperties();
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
     [HttpGet("api/auth/callback")]
-    public async Task<IActionResult> SignInGoogleCallback()
+    public async Task<IActionResult> Callback()
     {
         var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
         if (!result.Succeeded || result.Principal == null)
         {
-            var frontendUrl = "https://seodesk.tech/dashboard";
+            var frontendUrl = _configuration["FrontendUrl"] ?? "https://seodesk.tech";
             return Redirect($"{frontendUrl}?error=auth_failed");
         }
 
@@ -65,7 +62,7 @@ public class AuthController : ControllerBase
 
         if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(email))
         {
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var frontendUrl = _configuration["FrontendUrl"] ?? "https://seodesk.tech";
             return Redirect($"{frontendUrl}?error=missing_claims");
         }
 
@@ -132,7 +129,7 @@ public class AuthController : ControllerBase
 
         await _dbContext.SaveChangesAsync();
 
-        // Discover sites from GSC
+        // Discover sites
         if (!string.IsNullOrEmpty(user.GoogleRefreshToken))
         {
             try
@@ -145,15 +142,14 @@ public class AuthController : ControllerBase
             }
             catch (Exception ex)
             {
-                // Log but don't fail auth
                 Console.WriteLine($"Failed to discover sites: {ex.Message}");
             }
         }
 
         var jwt = GenerateJwtToken(user);
 
-        // Redirect to frontend with JWT
-        var redirectUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        // ✅ REDIRECT TO FRONTEND DASHBOARD
+        var redirectUrl = _configuration["FrontendUrl"] ?? "https://seodesk.tech";
         return Redirect($"{redirectUrl}/dashboard?token={jwt}");
     }
 
