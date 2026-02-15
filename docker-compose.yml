@@ -21,19 +21,18 @@ services:
       - seodesk-network
     restart: unless-stopped
 
-  
   # Backend API (.NET)
   seodesk.api:
     build:
       context: .
-      dockerfile: src/Seodesk.Api/Dockerfile
+      dockerfile: src/SEODesk.API/Dockerfile
     container_name: seodesk-api
+    user: root
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5000
       ASPNETCORE_HTTP_PORTS: "5000"
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=seodesk;Username=seodesk_user;Password=seodesk_pass_2024;Include Error Detail=true
-      Keycloak__Authority: http://keycloak:8080/realms/seodesk
     ports:
       - "5000:5000"
     depends_on:
@@ -42,6 +41,8 @@ services:
     networks:
       - seodesk-network
     restart: unless-stopped
+    volumes:
+      - dataprotection-keys:/persistent-keys
 
 networks:
   seodesk-network:
@@ -49,4 +50,6 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  dataprotection-keys:
     driver: local

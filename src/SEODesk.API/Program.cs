@@ -32,6 +32,11 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddUserSecrets<Program>(optional: true);
 }
 
+var keysPath = "/tmp/dataprotection-keys";
+Directory.CreateDirectory(keysPath);
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("SEODesk");
 
 // Database
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");

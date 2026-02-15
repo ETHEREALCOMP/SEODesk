@@ -21,6 +21,8 @@ COPY . .
 WORKDIR "/src/src/SEODesk.API"
 RUN dotnet build "./SEODesk.API.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
+RUN mkdir -p /persistent-keys && chown -R $APP_UID:$APP_UID /persistent-keys
+
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
