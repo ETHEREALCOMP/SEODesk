@@ -186,7 +186,6 @@ app.Use(async (context, next) =>
     await next();
 });
 
-
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
@@ -209,3 +208,10 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.Run();
+
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
