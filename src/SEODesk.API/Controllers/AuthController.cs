@@ -5,12 +5,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SEODesk.Domain.Entities;
 using SEODesk.Infrastructure.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
+using static System.Net.WebRequestMethods;
 
 namespace SEODesk.API.Controllers;
 
@@ -49,7 +50,7 @@ public class AuthController : ControllerBase
 
         if (!result.Succeeded || result.Principal == null)
         {
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var frontendUrl = "https://seodesk.tech/dashboard";
             return Redirect($"{frontendUrl}?error=auth_failed");
         }
 
