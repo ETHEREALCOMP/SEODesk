@@ -11,9 +11,19 @@ using SEODesk.Application.Features.Tags;
 using SEODesk.Application.Features.Users;
 using SEODesk.Infrastructure.Data;
 using SEODesk.Infrastructure.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Ensure user secrets are loaded in the Development environment so
+// values like Google:ClientId and Google:ClientSecret are available
+// even when running from the IDE or dotnet run.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddUserSecrets<Program>(optional: true);
+}
 
 // =======================
 // Database
