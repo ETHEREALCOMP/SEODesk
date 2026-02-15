@@ -33,13 +33,6 @@ if (builder.Environment.IsDevelopment())
 }
 
 
-var keysPath = "/persistent-keys";
-Directory.CreateDirectory(keysPath);
-
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-    .SetApplicationName("SEODesk");
-
 // Database
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
