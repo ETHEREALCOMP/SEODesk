@@ -113,6 +113,10 @@ if (string.IsNullOrWhiteSpace(googleClientId) || string.IsNullOrWhiteSpace(googl
     }
 }
 
+// Diagnostic: log whether Google credentials were loaded (do not print secret value)
+Console.WriteLine($"Google ClientId present: {!string.IsNullOrWhiteSpace(googleClientId)}");
+Console.WriteLine($"Google ClientSecret present: {!string.IsNullOrWhiteSpace(googleClientSecret)}");
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey missing");
