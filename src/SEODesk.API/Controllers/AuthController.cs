@@ -5,12 +5,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using SEODesk.Domain.Entities;
 using SEODesk.Infrastructure.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.IdentityModel.Tokens;
 
 namespace SEODesk.API.Controllers;
 
@@ -23,7 +23,7 @@ public class AuthController : ControllerBase
     private readonly Application.Features.Sites.DiscoverSitesHandler _discoverSitesHandler;
 
     public AuthController(
-        ApplicationDbContext dbContext, 
+        ApplicationDbContext dbContext,
         IConfiguration configuration,
         Application.Features.Sites.DiscoverSitesHandler discoverSitesHandler)
     {
@@ -32,13 +32,9 @@ public class AuthController : ControllerBase
         _discoverSitesHandler = discoverSitesHandler;
     }
 
-    // =========================
-    // GOOGLE SIGN IN
-    // =========================
     [HttpGet("signin-google")]
     public IActionResult SignInGoogle()
     {
-        // Вказуємо RedirectUri, куди перейти ПІСЛЯ того, як Google Middleware закінчить роботу
         var properties = new AuthenticationProperties
         {
             RedirectUri = "/api/auth/callback"
@@ -46,30 +42,20 @@ public class AuthController : ControllerBase
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
-    // =========================
-    // GOOGLE CALLBACK
-    // =========================
     [HttpGet("api/auth/callback")]
     public async Task<IActionResult> SignInGoogleCallback()
     {
-        var result = await HttpContext.AuthenticateAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme
-        );
+        var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
         if (!result.Succeeded || result.Principal == null)
         {
-            return BadRequest(new
-            {
-                error = "Google authentication failed",
-                reason = result.Failure?.Message
-            });
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            return Redirect($"{frontendUrl}?error=auth_failed");
         }
 
         var claims = result.Principal.Claims.ToList();
 
-        // 🔥 GOOGLE RETURNS "sub", NOT NameIdentifier
-        var googleId =
-            claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value
+        var googleId = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value
             ?? claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
@@ -78,12 +64,11 @@ public class AuthController : ControllerBase
 
         if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(email))
         {
-            return BadRequest(new { error = "Required claims missing" });
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            return Redirect($"{frontendUrl}?error=missing_claims");
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.GoogleId == googleId);
-        
-        // 🔥 Отримуємо refresh token
         var refreshToken = result.Properties.GetTokenValue("refresh_token");
 
         if (user == null)
@@ -137,7 +122,7 @@ public class AuthController : ControllerBase
             user.UpdatedAt = DateTime.UtcNow;
             user.Name = name ?? user.Name;
             user.Picture = picture ?? user.Picture;
-            
+
             if (!string.IsNullOrEmpty(refreshToken))
             {
                 user.GoogleRefreshToken = refreshToken;
@@ -146,25 +131,31 @@ public class AuthController : ControllerBase
 
         await _dbContext.SaveChangesAsync();
 
-        // 🔥 Автоматично тягнемо сайти з GSC
+        // Discover sites from GSC
         if (!string.IsNullOrEmpty(user.GoogleRefreshToken))
         {
-            await _discoverSitesHandler.HandleAsync(
-                new Application.Features.Sites.DiscoverSitesCommand { UserId = user.Id },
-                _configuration["Google:ClientId"]!,
-                _configuration["Google:ClientSecret"]!
-            );
+            try
+            {
+                await _discoverSitesHandler.HandleAsync(
+                    new Application.Features.Sites.DiscoverSitesCommand { UserId = user.Id },
+                    _configuration["Google:ClientId"]!,
+                    _configuration["Google:ClientSecret"]!
+                );
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail auth
+                Console.WriteLine($"Failed to discover sites: {ex.Message}");
+            }
         }
 
         var jwt = GenerateJwtToken(user);
 
-        // ✅ Redirect to frontend with JWT token in URL
-        return Redirect($"http://localhost:3000/dashboard?token={jwt}");
+        // Redirect to frontend with JWT
+        var redirectUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        return Redirect($"{redirectUrl}/dashboard?token={jwt}");
     }
 
-    // =========================
-    // ME (JWT ONLY)
-    // =========================
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpGet("api/auth/me")]
     public async Task<IActionResult> GetMe()
@@ -193,9 +184,12 @@ public class AuthController : ControllerBase
         });
     }
 
-    // =========================
-    // JWT
-    // =========================
+    [HttpPost("signout")]
+    public IActionResult SignOut()
+    {
+        return Ok(new { success = true, message = "Signed out successfully" });
+    }
+
     private string GenerateJwtToken(User user)
     {
         var jwt = _configuration.GetSection("JwtSettings");
