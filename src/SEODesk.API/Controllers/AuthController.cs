@@ -37,7 +37,7 @@ public class AuthController : ControllerBase
     {
         var properties = new AuthenticationProperties
         {
-            RedirectUri = "/api/auth/callback"
+            RedirectUri = "https://api.seodesk.tech/api/auth/callback"
         };
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
