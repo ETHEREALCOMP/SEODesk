@@ -35,7 +35,6 @@ public class AuthController : ControllerBase
     [HttpGet("signin-google")]
     public IActionResult SignInGoogle()
     {
-        // ✅ НЕ ВКАЗУВАТИ RedirectUri - нехай middleware сам визначить
         var properties = new AuthenticationProperties();
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }

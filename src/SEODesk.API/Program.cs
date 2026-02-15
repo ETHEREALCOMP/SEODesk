@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SEODesk.Application.Features.Dashboard;
@@ -11,11 +12,17 @@ using SEODesk.Application.Features.Tags;
 using SEODesk.Application.Features.Users;
 using SEODesk.Infrastructure.Data;
 using SEODesk.Infrastructure.Services;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.UserSecrets;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
+                              ForwardedHeaders.XForwardedProto |
+                              ForwardedHeaders.XForwardedHost;
+    options.KnownProxies.Clear();
+});
 
 // Ensure user secrets are loaded in the Development environment so
 // values like Google:ClientId and Google:ClientSecret are available
@@ -108,42 +115,41 @@ builder.Services
     // ---- GOOGLE OAUTH
     .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
     {
-        options.ClientId = builder.Configuration["Google:ClientId"]
-            ?? throw new InvalidOperationException("Google:ClientId missing");
-
-        options.ClientSecret = builder.Configuration["Google:ClientSecret"]
-            ?? throw new InvalidOperationException("Google:ClientSecret missing");
-
-        options.CallbackPath = "/signin-google/callback";
-
-        // 🔴 CRITICAL
-        options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-
+        options.ClientId = builder.Configuration["Google:ClientId"]!;
+        options.ClientSecret = builder.Configuration["Google:ClientSecret"]!;
+        options.CallbackPath = "/api/auth/callback";
         options.SaveTokens = true;
 
+        options.Scope.Add("email");
         options.Scope.Add("profile");
         options.Scope.Add("https://www.googleapis.com/auth/webmasters.readonly");
 
         options.ClaimActions.MapJsonKey("picture", "picture", "url");
 
-        // 🔥 Request Refresh Token
-        options.AccessType = "offline";
-        options.Events.OnRedirectToAuthorizationEndpoint = context =>
+        // ✅ Обробка Railway proxy
+        options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
         {
-            context.Response.Redirect(context.RedirectUri + "&prompt=consent");
-            return Task.CompletedTask;
-        };
-
-        options.Events.OnCreatingTicket = context =>
-        {
-            var picture = context.User.GetProperty("picture").GetString();
-            if (!string.IsNullOrEmpty(picture))
+            OnRedirectToAuthorizationEndpoint = context =>
             {
-                context.Identity?.AddClaim(
-                    new System.Security.Claims.Claim("picture", picture)
-                );
+                // Перевірити чи правильна схема
+                if (context.RedirectUri.StartsWith("http://"))
+                {
+                    context.RedirectUri = context.RedirectUri.Replace("http://", "https://");
+                }
+
+                Console.WriteLine($"OAuth Redirect URI: {context.RedirectUri}");
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            },
+            OnCreatingTicket = context =>
+            {
+                var picture = context.User.GetProperty("picture").GetString();
+                if (!string.IsNullOrEmpty(picture))
+                {
+                    context.Identity?.AddClaim(new System.Security.Claims.Claim("picture", picture));
+                }
+                return Task.CompletedTask;
             }
-            return Task.CompletedTask;
         };
     });
 
@@ -176,6 +182,25 @@ builder.Services.AddScoped<UpdateUserPreferencesHandler>();
 // Pipeline
 // =======================
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    // Railway forwarding
+    var forwardedProto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedProto))
+    {
+        context.Request.Scheme = forwardedProto;
+    }
+
+    var forwardedHost = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwardedHost))
+    {
+        context.Request.Host = new HostString(forwardedHost);
+    }
+
+    await next();
+});
+
 
 app.Use(async (context, next) =>
 {
