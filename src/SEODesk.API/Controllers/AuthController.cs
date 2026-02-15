@@ -47,7 +47,7 @@ public class AuthController : ControllerBase
 
         if (!result.Succeeded || result.Principal == null)
         {
-            var frontendUrl = _configuration["FrontendUrl"] ?? "https://seodesk.tech";
+            var frontendUrl ="https://seodesk.tech/dashboard";
             return Redirect($"{frontendUrl}?error=auth_failed");
         }
 
