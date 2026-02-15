@@ -32,11 +32,27 @@ if (builder.Environment.IsDevelopment())
 }
 
 // Database
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+
+if (string.IsNullOrEmpty(databaseUrl))
+    throw new InvalidOperationException("DATABASE_URL environment variable is missing");
+
+var databaseUri = new Uri(databaseUrl);
+var userInfo = databaseUri.UserInfo.Split(':');
+
+var npgsqlBuilder = new Npgsql.NpgsqlConnectionStringBuilder
+{
+    Host = databaseUri.Host,
+    Port = databaseUri.Port,
+    Username = userInfo[0],
+    Password = userInfo[1],
+    Database = databaseUri.LocalPath.TrimStart('/'),
+    SslMode = Npgsql.SslMode.Require,
+    Pooling = true
+};
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        npgsql => npgsql.EnableRetryOnFailure()
-    )
+    options.UseNpgsql(npgsqlBuilder.ConnectionString, npgsql => npgsql.EnableRetryOnFailure())
 );
 
 // MVC / Swagger
