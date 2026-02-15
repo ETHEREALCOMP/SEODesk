@@ -85,12 +85,13 @@ builder.Services
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+        options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
         options.Cookie.Name = "SEODesk.TempAuth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.None; // ✅ Для cross-site
+        options.Cookie.SameSite = SameSiteMode.None;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
         options.SlidingExpiration = false;
