@@ -177,6 +177,8 @@ builder.Services.AddScoped<UpdateUserPreferencesHandler>();
 // =======================
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
