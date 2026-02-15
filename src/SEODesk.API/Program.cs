@@ -177,6 +177,16 @@ builder.Services.AddScoped<UpdateUserPreferencesHandler>();
 // =======================
 var app = builder.Build();
 
+app.Use(async (context, next) =>
+{
+    if (context.Request.Headers.ContainsKey("X-Forwarded-Proto"))
+    {
+        context.Request.Scheme = "https";
+    }
+    await next();
+});
+
+
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
