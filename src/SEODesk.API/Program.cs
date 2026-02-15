@@ -21,20 +21,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
                               ForwardedHeaders.XForwardedProto |
                               ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
-// Ensure user secrets are loaded in the Development environment so
-// values like Google:ClientId and Google:ClientSecret are available
-// even when running from the IDE or dotnet run.
 if (builder.Environment.IsDevelopment())
 {
     builder.Configuration.AddUserSecrets<Program>(optional: true);
 }
 
-// =======================
 // Database
-// =======================
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -42,30 +38,27 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
-// =======================
 // MVC / Swagger
-// =======================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// =======================
 // CORS
-// =======================
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:3000", "https://seodesk.tech" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
 
-// =======================
 // Authentication
-// =======================
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey missing");
@@ -76,43 +69,31 @@ builder.Services
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
     })
-
-    // ---- TEMP COOKIE (OAuth only)
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
         options.Cookie.Name = "SEODesk.TempAuth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SameSite = SameSiteMode.None; // ✅ Для cross-site
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
         options.SlidingExpiration = false;
     })
-
-    // ---- JWT (API only)
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
     {
         options.RequireHttpsMetadata = false;
         options.SaveToken = true;
-
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(secretKey)
-            ),
-
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             ClockSkew = TimeSpan.Zero
         };
     })
-
-    // ---- GOOGLE OAUTH
     .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
     {
         options.ClientId = builder.Configuration["Google:ClientId"]!;
@@ -120,27 +101,16 @@ builder.Services
         options.CallbackPath = "/api/auth/callback";
         options.SaveTokens = true;
 
+        options.Scope.Clear();
+        options.Scope.Add("openid");
         options.Scope.Add("email");
         options.Scope.Add("profile");
         options.Scope.Add("https://www.googleapis.com/auth/webmasters.readonly");
 
         options.ClaimActions.MapJsonKey("picture", "picture", "url");
 
-        // ✅ Обробка Railway proxy
         options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
         {
-            OnRedirectToAuthorizationEndpoint = context =>
-            {
-                // Перевірити чи правильна схема
-                if (context.RedirectUri.StartsWith("http://"))
-                {
-                    context.RedirectUri = context.RedirectUri.Replace("http://", "https://");
-                }
-
-                Console.WriteLine($"OAuth Redirect URI: {context.RedirectUri}");
-                context.Response.Redirect(context.RedirectUri);
-                return Task.CompletedTask;
-            },
             OnCreatingTicket = context =>
             {
                 var picture = context.User.GetProperty("picture").GetString();
@@ -149,18 +119,20 @@ builder.Services
                     context.Identity?.AddClaim(new System.Security.Claims.Claim("picture", picture));
                 }
                 return Task.CompletedTask;
+            },
+            OnRemoteFailure = context =>
+            {
+                Console.WriteLine($"❌ OAuth failure: {context.Failure?.Message}");
+                context.HandleResponse();
+                context.Response.Redirect("https://seodesk.tech?error=oauth_failed");
+                return Task.CompletedTask;
             }
         };
     });
 
-// =======================
-// Authorization
-// =======================
 builder.Services.AddAuthorization();
 
-// =======================
 // DI
-// =======================
 builder.Services.AddScoped<GoogleSearchConsoleService>();
 builder.Services.AddScoped<GetDashboardHandler>();
 builder.Services.AddScoped<GetTagsHandler>();
@@ -178,14 +150,28 @@ builder.Services.AddScoped<GetUserInfoHandler>();
 builder.Services.AddScoped<GetUserPreferencesHandler>();
 builder.Services.AddScoped<UpdateUserPreferencesHandler>();
 
-// =======================
-// Pipeline
-// =======================
 var app = builder.Build();
 
+// ✅ МІГРАЦІЇ ПЕРЕД app.Run()
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        Console.WriteLine("Running database migrations...");
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Database.Migrate();
+        Console.WriteLine("✅ Database migrations completed");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Migration failed: {ex.Message}");
+        Console.WriteLine($"Stack: {ex.StackTrace}");
+    }
+}
+
+// Middleware
 app.Use(async (context, next) =>
 {
-    // Railway forwarding
     var forwardedProto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
     if (!string.IsNullOrEmpty(forwardedProto))
     {
@@ -201,16 +187,6 @@ app.Use(async (context, next) =>
     await next();
 });
 
-
-app.Use(async (context, next) =>
-{
-    if (context.Request.Headers.ContainsKey("X-Forwarded-Proto"))
-    {
-        context.Request.Scheme = "https";
-    }
-    await next();
-});
-
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
@@ -221,22 +197,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
+
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "healthy",
     timestamp = DateTime.UtcNow
 }));
 
+Console.WriteLine("🚀 Application starting...");
 app.Run();
-
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
-}
