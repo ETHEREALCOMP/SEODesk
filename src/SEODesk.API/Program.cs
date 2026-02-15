@@ -89,6 +89,30 @@ builder.Services.AddCors(options =>
 var googleClientId = builder.Configuration["Google:ClientId"];
 var googleClientSecret = builder.Configuration["Google:ClientSecret"];
 
+// In production the developer may provide secrets via environment variables.
+// Support both the double-underscore env var convention (Google__ClientId)
+// and common names (GOOGLE_CLIENT_ID). Fail fast with a clear message if
+// credentials are not provided so we don't return a 500 during the OAuth
+// redirect flow.
+if (string.IsNullOrWhiteSpace(googleClientId) || string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    var envClient = Environment.GetEnvironmentVariable("Google__ClientId")
+                    ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+    var envSecret = Environment.GetEnvironmentVariable("Google__ClientSecret")
+                    ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+
+    if (!string.IsNullOrWhiteSpace(envClient) && !string.IsNullOrWhiteSpace(envSecret))
+    {
+        googleClientId = envClient;
+        googleClientSecret = envSecret;
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            "Google OAuth credentials not configured. Set configuration keys 'Google:ClientId' and 'Google:ClientSecret' or environment variables 'Google__ClientId' and 'Google__ClientSecret'.");
+    }
+}
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey missing");
