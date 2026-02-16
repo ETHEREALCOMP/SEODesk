@@ -24,6 +24,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
                               ForwardedHeaders.XForwardedProto |
                               ForwardedHeaders.XForwardedHost;
     options.KnownProxies.Clear();
+    options.KnownNetworks.Clear();
+    options.ForwardedLimit = null; // Trust all proxies in a container environment
 });
 
 if (builder.Environment.IsDevelopment())
@@ -201,22 +203,6 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.Use(async (context, next) =>
-{
-    var forwardedProto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(forwardedProto))
-    {
-        context.Request.Scheme = forwardedProto;
-    }
-    var forwardedHost = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(forwardedHost))
-    {
-        context.Request.Host = new HostString(forwardedHost);
-    }
-
-    await next();
-});
-
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
@@ -225,8 +211,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseMiddleware<HttpsRedirectMiddleware>();
-app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();

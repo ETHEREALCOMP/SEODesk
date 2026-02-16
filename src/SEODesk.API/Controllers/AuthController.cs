@@ -32,10 +32,13 @@ public class AuthController : ControllerBase
         _discoverSitesHandler = discoverSitesHandler;
     }
 
-    [HttpGet("/signin-google")]
+    [HttpGet("google")]
     public IActionResult SignInGoogle()
     {
-        Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] === SIGNIN-GOOGLE HIT ===");
+        Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] === SIGNIN-GOOGLE START ===");
+        Console.WriteLine($"Request Scheme: {Request.Scheme}");
+        Console.WriteLine($"Request Host: {Request.Host}");
+        Console.WriteLine($"Request Remote IP: {HttpContext.Connection.RemoteIpAddress}");
 
         var properties = new AuthenticationProperties
         {
