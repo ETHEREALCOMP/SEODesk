@@ -52,6 +52,8 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Callback()
     {
         Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] === CALLBACK HIT ===");
+        Console.WriteLine($"Callback Scheme: {Request.Scheme}");
+        Console.WriteLine($"Callback Host: {Request.Host}");
 
         try
         {
@@ -59,7 +61,7 @@ public class AuthController : ControllerBase
 
             if (!result.Succeeded || result.Principal == null)
             {
-                Console.WriteLine("❌ Authentication failed");
+                Console.WriteLine($"❌ Authentication failed: {result.Failure?.Message}");
                 return Redirect("https://seodesk.tech?error=auth_failed");
             }
 
