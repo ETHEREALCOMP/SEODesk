@@ -137,7 +137,6 @@ builder.Services
     {
         options.ClientId = googleClientId!;
         options.ClientSecret = googleClientSecret!;
-        options.CallbackPath = "/api/auth/callback";
         options.SaveTokens = true;
 
         options.Scope.Clear();

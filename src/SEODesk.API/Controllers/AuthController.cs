@@ -35,7 +35,13 @@ public class AuthController : ControllerBase
     [HttpGet("signin-google")]
     public IActionResult SignInGoogle()
     {
-        var properties = new AuthenticationProperties();
+        var redirectUrl = Url.Action(nameof(Callback), "Auth");
+
+        var properties = new AuthenticationProperties
+        {
+            RedirectUri = redirectUrl
+        };
+
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
