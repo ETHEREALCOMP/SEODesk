@@ -61,7 +61,8 @@ public class AuthController : ControllerBase
 
             if (!result.Succeeded || result.Principal == null)
             {
-                Console.WriteLine($"❌ Authentication failed: {result.Failure?.Message}");
+                var failureReason = result.Failure?.Message ?? "No failure message";
+                Console.WriteLine($"❌ Authentication failed: {failureReason}");
                 return Redirect("https://seodesk.tech?error=auth_failed");
             }
 

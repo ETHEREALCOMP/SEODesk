@@ -23,9 +23,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
                               ForwardedHeaders.XForwardedProto |
                               ForwardedHeaders.XForwardedHost;
+    
+    // Explicitly use the namespace to avoid ambiguity with System.Net.IPNetwork in .NET 8+
     options.KnownProxies.Clear();
     options.KnownNetworks.Clear();
-    options.ForwardedLimit = null; // Trust all proxies in a container environment
 });
 
 if (builder.Environment.IsDevelopment())
