@@ -1,9 +1,10 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SEODesk.Domain.Entities;
 
 namespace SEODesk.Infrastructure.Data;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) 
         : base(options)
@@ -17,6 +18,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<SiteTag> SiteTags => Set<SiteTag>();
     public DbSet<SiteMetric> SiteMetrics => Set<SiteMetric>();
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,43 +1,16 @@
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: seodesk-postgres
-    environment:
-      POSTGRES_DB: seodesk
-      POSTGRES_USER: seodesk_user
-      POSTGRES_PASSWORD: seodesk_pass_2024
-      PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U seodesk_user -d seodesk"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - seodesk-network
-    restart: unless-stopped
-
-  # Backend API (.NET)
   seodesk.api:
     build:
       context: .
       dockerfile: src/SEODesk.API/Dockerfile
     container_name: seodesk-api
-    user: root
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:5000
-      ASPNETCORE_HTTP_PORTS: "5000"
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=seodesk;Username=seodesk_user;Password=seodesk_pass_2024;Include Error Detail=true
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_HTTP_PORTS=5000
+      - DATABASE_URL=postgresql://postgres:YenmNauAjfRmywgzFdhrWzVegazsIjRG@hopper.proxy.rlwy.net:22302/railway
     ports:
       - "5000:5000"
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - seodesk-network
     restart: unless-stopped
@@ -49,7 +22,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-    driver: local
   dataprotection-keys:
     driver: local

@@ -23,7 +23,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
                               ForwardedHeaders.XForwardedProto |
                               ForwardedHeaders.XForwardedHost;
-    options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -32,13 +31,6 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddUserSecrets<Program>(optional: true);
 }
 
-var keysPath = "/tmp/dataprotection-keys";
-Directory.CreateDirectory(keysPath);
-
-builder.Services.AddDataProtection()
-    .SetApplicationName("SEODesk");
-
-// Database
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 if (string.IsNullOrEmpty(databaseUrl))
@@ -62,12 +54,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(npgsqlBuilder.ConnectionString, npgsql => npgsql.EnableRetryOnFailure())
 );
 
-// MVC / Swagger
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<ApplicationDbContext>()
+    .SetApplicationName("SEODesk");
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:3000", "https://seodesk.tech" };
 
@@ -82,16 +76,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Authentication
-
 var googleClientId = builder.Configuration["Google:ClientId"];
 var googleClientSecret = builder.Configuration["Google:ClientSecret"];
 
-// In production the developer may provide secrets via environment variables.
-// Support both the double-underscore env var convention (Google__ClientId)
-// and common names (GOOGLE_CLIENT_ID). Fail fast with a clear message if
-// credentials are not provided so we don't return a 500 during the OAuth
-// redirect flow.
 if (string.IsNullOrWhiteSpace(googleClientId) || string.IsNullOrWhiteSpace(googleClientSecret))
 {
     var envClient = Environment.GetEnvironmentVariable("Google__ClientId")
@@ -107,18 +94,13 @@ if (string.IsNullOrWhiteSpace(googleClientId) || string.IsNullOrWhiteSpace(googl
     else
     {
         throw new InvalidOperationException(
-            "Google OAuth credentials not configured. Set configuration keys 'Google:ClientId' and 'Google:ClientSecret' or environment variables 'Google__ClientId' and 'Google__ClientSecret'.");
+            "Google OAuth credentials not configured.");
     }
 }
-
-// Diagnostic: log whether Google credentials were loaded (do not print secret value)
-Console.WriteLine($"Google ClientId present: {!string.IsNullOrWhiteSpace(googleClientId)}");
-Console.WriteLine($"Google ClientSecret present: {!string.IsNullOrWhiteSpace(googleClientSecret)}");
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey missing");
-
 builder.Services
     .AddAuthentication(options =>
     {
@@ -179,7 +161,6 @@ builder.Services
             },
             OnRemoteFailure = context =>
             {
-                Console.WriteLine($"❌ OAuth failure: {context.Failure?.Message}");
                 context.HandleResponse();
                 context.Response.Redirect("https://seodesk.tech?error=oauth_failed");
                 return Task.CompletedTask;
@@ -189,7 +170,6 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// DI
 builder.Services.AddScoped<GoogleSearchConsoleService>();
 builder.Services.AddScoped<GetDashboardHandler>();
 builder.Services.AddScoped<GetTagsHandler>();
@@ -209,24 +189,19 @@ builder.Services.AddScoped<UpdateUserPreferencesHandler>();
 
 var app = builder.Build();
 
-// ✅ МІГРАЦІЇ ПЕРЕД app.Run()
 using (var scope = app.Services.CreateScope())
 {
     try
     {
-        Console.WriteLine("Running database migrations...");
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Database.Migrate();
-        Console.WriteLine("✅ Database migrations completed");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Migration failed: {ex.Message}");
-        Console.WriteLine($"Stack: {ex.StackTrace}");
+        Console.WriteLine($"Migration failed: {ex.Message}");
     }
 }
 
-// Middleware
 app.Use(async (context, next) =>
 {
     var forwardedProto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
@@ -234,7 +209,6 @@ app.Use(async (context, next) =>
     {
         context.Request.Scheme = forwardedProto;
     }
-
     var forwardedHost = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
     if (!string.IsNullOrEmpty(forwardedHost))
     {
@@ -265,5 +239,4 @@ app.MapGet("/health", () => Results.Ok(new
     timestamp = DateTime.UtcNow
 }));
 
-Console.WriteLine("🚀 Application starting...");
 app.Run();
