@@ -12,7 +12,7 @@ using SEODesk.Infrastructure.Data;
 namespace SEODesk.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260216005033_AddDataProtectionKeys")]
+    [Migration("20260216005600_AddDataProtectionKeys")]
     partial class AddDataProtectionKeys
     {
         /// <inheritdoc />
