@@ -15,7 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace SEODesk.API.Controllers;
 
 [ApiController]
-[Route("")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
@@ -32,56 +32,58 @@ public class AuthController : ControllerBase
         _discoverSitesHandler = discoverSitesHandler;
     }
 
-    [HttpGet("signin-google")]
+    [HttpGet("/signin-google")]
     public IActionResult SignInGoogle()
     {
-        var redirectUrl = Url.Action(nameof(Callback), "Auth");
+        Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] === SIGNIN-GOOGLE HIT ===");
 
         var properties = new AuthenticationProperties
         {
-            RedirectUri = redirectUrl
+            RedirectUri = "/api/auth/callback"
         };
 
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
-    [HttpGet("api/auth/callback")]
+    [HttpGet("callback")]
     public async Task<IActionResult> Callback()
     {
-        Console.WriteLine("🔹 Callback started");
-
-        // 1. Отримуємо дані від Google
-        var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-        if (!result.Succeeded || result.Principal == null)
-        {
-            Console.WriteLine("❌ Authentication failed or Principal is null");
-            return Redirect("https://seodesk.tech?error=auth_failed_principal_null");
-        }
-
-        var claims = result.Principal.Claims.ToList();
-        var googleId = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value
-            ?? claims.FirstOrDefault(c => c.Type == "sub")?.Value;
-        var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-        var name = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-        var picture = claims.FirstOrDefault(c => c.Type == "picture")?.Value;
-
-        Console.WriteLine($"✅ Google Info: ID={googleId}, Email={email}");
-
-        if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(email))
-        {
-            return Redirect("https://seodesk.tech?error=missing_claims");
-        }
-
-        // 2. Шукаємо або створюємо користувача
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.GoogleId == googleId);
-        var refreshToken = result.Properties?.GetTokenValue("refresh_token");
+        Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] === CALLBACK HIT ===");
 
         try
         {
+            var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            if (!result.Succeeded || result.Principal == null)
+            {
+                Console.WriteLine("❌ Authentication failed");
+                return Redirect("https://seodesk.tech?error=auth_failed");
+            }
+
+            var claims = result.Principal.Claims.ToList();
+            Console.WriteLine($"Claims count: {claims.Count}");
+
+            var googleId = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value
+                ?? claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+            var name = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+            var picture = claims.FirstOrDefault(c => c.Type == "picture")?.Value;
+
+            Console.WriteLine($"Google: ID={googleId}, Email={email}");
+
+            if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(email))
+            {
+                Console.WriteLine("❌ Missing claims");
+                return Redirect("https://seodesk.tech?error=missing_claims");
+            }
+
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.GoogleId == googleId);
+            var refreshToken = result.Properties?.GetTokenValue("refresh_token");
+
             if (user == null)
             {
-                Console.WriteLine("🆕 Creating new user...");
+                Console.WriteLine("Creating new user...");
+
                 user = new User
                 {
                     Id = Guid.NewGuid(),
@@ -97,7 +99,6 @@ public class AuthController : ControllerBase
 
                 _dbContext.Users.Add(user);
 
-                // Додаємо групу та теги
                 _dbContext.Groups.Add(new Group
                 {
                     Id = Guid.NewGuid(),
@@ -117,22 +118,18 @@ public class AuthController : ControllerBase
                     CreatedAt = DateTime.UtcNow
                 });
 
-                // ТУТ БУЛА ПОМИЛКА В СТАРОМУ КОДІ
-                // UserPreferences додавалися не до DbSet, а якось дивно. Виправляємо:
                 _dbContext.UserPreferences.Add(new UserPreference
                 {
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
                     SelectedMetrics = "clicks,impressions",
                     LastRangePreset = "last28days",
-                    LastGroupId = null, // Явно вказуємо null
-                    LastTagId = null,   // Явно вказуємо null
                     UpdatedAt = DateTime.UtcNow
                 });
             }
             else
             {
-                Console.WriteLine("👤 Updating existing user...");
+                Console.WriteLine("Updating existing user...");
                 user.LastLoginAt = DateTime.UtcNow;
                 user.UpdatedAt = DateTime.UtcNow;
                 user.Name = name ?? user.Name;
@@ -143,25 +140,18 @@ public class AuthController : ControllerBase
                     user.GoogleRefreshToken = refreshToken;
                 }
             }
-            await _dbContext.SaveChangesAsync();
-            Console.WriteLine("💾 User saved to DB");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ DB Error: {ex.Message} \n {ex.InnerException?.Message}");
-            return Redirect($"https://seodesk.tech?error=db_error&details={System.Net.WebUtility.UrlEncode(ex.Message)}");
-        }
 
-        // 3. Discover sites (фоново або безпечно)
-        if (!string.IsNullOrEmpty(user.GoogleRefreshToken))
-        {
-            // Запускаємо це в окремому таску, щоб не блокувати логін, якщо discovery впаде
-            _ = Task.Run(async () =>
+            await _dbContext.SaveChangesAsync();
+            Console.WriteLine("✅ User saved");
+
+            // Discover sites (background)
+            if (!string.IsNullOrEmpty(user.GoogleRefreshToken))
             {
-                try
+                _ = Task.Run(async () =>
                 {
-                    using (var scope = HttpContext.RequestServices.CreateScope())
+                    try
                     {
+                        using var scope = HttpContext.RequestServices.CreateScope();
                         var handler = scope.ServiceProvider.GetRequiredService<Application.Features.Sites.DiscoverSitesHandler>();
                         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
@@ -171,23 +161,29 @@ public class AuthController : ControllerBase
                             config["Google:ClientSecret"]!
                         );
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠️ Discovery failed (background): {ex.Message}");
-                }
-            });
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️ Discovery failed: {ex.Message}");
+                    }
+                });
+            }
+
+            var jwt = GenerateJwtToken(user);
+            var redirectUrl = $"https://seodesk.tech/dashboard?token={jwt}";
+
+            Console.WriteLine($"✅ Redirecting to: {redirectUrl}");
+            return Redirect(redirectUrl);
         }
-
-        var jwt = GenerateJwtToken(user);
-
-        var frontendBaseUrl = _configuration["FrontendUrl"]?.TrimEnd('/') ?? "https://seodesk.tech";
-        var finalUrl = $"{frontendBaseUrl}/dashboard?token={jwt}";
-        return Redirect(finalUrl);
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Callback error: {ex.Message}");
+            Console.WriteLine($"Stack: {ex.StackTrace}");
+            return Redirect("https://seodesk.tech?error=server_error");
+        }
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    [HttpGet("api/auth/me")]
+    [HttpGet("me")]  // ✅ ВИПРАВЛЕНО - тепер буде /api/auth/me
     public async Task<IActionResult> GetMe()
     {
         var googleId = User.FindFirstValue(ClaimTypes.NameIdentifier)
