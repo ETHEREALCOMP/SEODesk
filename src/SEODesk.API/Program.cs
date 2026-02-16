@@ -141,6 +141,7 @@ builder.Services
         options.ClientId = googleClientId!;
         options.ClientSecret = googleClientSecret!;
         options.SaveTokens = true;
+        options.CallbackPath = "/signin-google"; // Це має збігатися з Google Cloud
 
         options.Scope.Clear();
         options.Scope.Add("openid");

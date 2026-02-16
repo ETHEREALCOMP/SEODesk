@@ -175,7 +175,8 @@ public class AuthController : ControllerBase
             }
 
             var jwt = GenerateJwtToken(user);
-            var redirectUrl = $"https://seodesk.tech/dashboard?token={jwt}";
+            var frontendUrl = _configuration["FrontendUrl"]?.TrimEnd('/') ?? "https://seodesk.tech";
+            var redirectUrl = $"{frontendUrl}/dashboard?token={jwt}";
 
             Console.WriteLine($"✅ Redirecting to: {redirectUrl}");
             return Redirect(redirectUrl);
