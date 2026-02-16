@@ -107,9 +107,10 @@ var secretKey = jwtSettings["SecretKey"]
 builder.Services
     .AddAuthentication(options =>
     {
-        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
     })
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
     {
@@ -141,7 +142,7 @@ builder.Services
         options.ClientId = googleClientId!;
         options.ClientSecret = googleClientSecret!;
         options.SaveTokens = true;
-        options.CallbackPath = "/signin-google"; // Це має збігатися з Google Cloud
+        options.CallbackPath = "/api/auth/google/callback"; // Це має збігатися з Google Cloud
 
         options.Scope.Clear();
         options.Scope.Add("openid");
