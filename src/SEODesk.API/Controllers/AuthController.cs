@@ -150,22 +150,28 @@ public class AuthController : ControllerBase
             await _dbContext.SaveChangesAsync();
             Console.WriteLine("✅ User saved");
 
-            // Discover sites (background)
-            if (!string.IsNullOrEmpty(user.GoogleRefreshToken))
+            var services = HttpContext.RequestServices;
+            var userId = user.Id;
+            var googleClientId = _configuration["Google:ClientId"]!;
+            var googleClientSecret = _configuration["Google:ClientSecret"]!;
+            var userRefreshToken = user.GoogleRefreshToken;
+
+            if (!string.IsNullOrEmpty(userRefreshToken))
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        using var scope = HttpContext.RequestServices.CreateScope();
-                        var handler = scope.ServiceProvider.GetRequiredService<Application.Features.Sites.DiscoverSitesHandler>();
-                        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                        using var scope = services.CreateScope(); // ✅ Використати збережений
+                        var handler = scope.ServiceProvider
+                            .GetRequiredService<Application.Features.Sites.DiscoverSitesHandler>();
 
                         await handler.HandleAsync(
-                            new Application.Features.Sites.DiscoverSitesCommand { UserId = user.Id },
-                            config["Google:ClientId"]!,
-                            config["Google:ClientSecret"]!
+                            new Application.Features.Sites.DiscoverSitesCommand { UserId = userId },
+                            googleClientId,
+                            googleClientSecret
                         );
+                        Console.WriteLine("✅ Sites discovered");
                     }
                     catch (Exception ex)
                     {

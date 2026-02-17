@@ -168,7 +168,13 @@ builder.Services
                 context.HandleResponse();
                 context.Response.Redirect("https://seodesk.tech?error=oauth_failed");
                 return Task.CompletedTask;
-            }
+            },
+            OnRedirectToAuthorizationEndpoint = context =>
+            {
+                context.RedirectUri += "&access_type=offline&prompt=consent";
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            },
         };
     });
 

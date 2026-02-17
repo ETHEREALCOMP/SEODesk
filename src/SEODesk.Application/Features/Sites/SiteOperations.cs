@@ -107,8 +107,8 @@ public class SyncSiteDataCommand
 {
     public Guid UserId { get; set; }
     public Guid SiteId { get; set; }
-    public DateOnly StartDate { get; set; }
-    public DateOnly EndDate { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
 }
 
 public class SyncSiteDataHandler
@@ -122,6 +122,12 @@ public class SyncSiteDataHandler
     {
         _dbContext = dbContext;
         _gscService = gscService;
+    }
+
+    public async Task<Site?> GetSiteByPropertyIdAsync(Guid userId, string propertyId)
+    {
+        return await _dbContext.Sites
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.PropertyId == propertyId);
     }
 
     public async Task<Result<bool>> HandleAsync(SyncSiteDataCommand command, string clientId, string clientSecret)
@@ -164,7 +170,9 @@ public class SyncSiteDataHandler
                 var existing = await _dbContext.SiteMetrics
                     .FirstOrDefaultAsync(m => m.SiteId == site.Id && m.Date == metric.Date);
 
-                var keywordsCount = keywordsCounts.TryGetValue(metric.Date, out var count) ? count : 0;
+                var date = DateOnly.FromDateTime(metric.Date);
+
+                var keywordsCount = keywordsCounts.TryGetValue(date, out var count) ? count : 0;
 
                 if (existing != null)
                 {
@@ -218,8 +226,8 @@ public class ExportSiteDataQuery
 {
     public Guid UserId { get; set; }
     public Guid SiteId { get; set; }
-    public DateOnly DateFrom { get; set; }
-    public DateOnly DateTo { get; set; }
+    public DateTime DateFrom { get; set; }
+    public DateTime DateTo { get; set; }
 }
 
 public class ExportSiteDataHandler

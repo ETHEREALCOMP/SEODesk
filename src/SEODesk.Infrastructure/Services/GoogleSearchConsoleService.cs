@@ -58,8 +58,8 @@ public class GoogleSearchConsoleService
     public async Task<List<MetricData>> GetSiteMetricsAsync(
         SearchConsoleService service,
         string siteUrl,
-        DateOnly startDate,
-        DateOnly endDate)
+        DateTime startDate,
+        DateTime endDate)
     {
         var request = new SearchAnalyticsQueryRequest
         {
@@ -80,7 +80,7 @@ public class GoogleSearchConsoleService
 
         return response.Rows.Select(row => new MetricData
         {
-            Date = DateOnly.Parse(row.Keys[0]),
+            Date = DateTime.Parse(row.Keys[0]),
             Clicks = (long)(row.Clicks ?? 0),
             Impressions = (long)(row.Impressions ?? 0),
             Ctr = row.Ctr ?? 0,
@@ -118,8 +118,8 @@ public class GoogleSearchConsoleService
     public async Task<Dictionary<DateOnly, int>> GetKeywordsCountByDateAsync(
         SearchConsoleService service,
         string siteUrl,
-        DateOnly startDate,
-        DateOnly endDate)
+        DateTime startDate,
+        DateTime endDate)
     {
         var request = new SearchAnalyticsQueryRequest
         {
@@ -149,7 +149,7 @@ public class GoogleSearchConsoleService
 
 public class MetricData
 {
-    public DateOnly Date { get; set; }
+    public DateTime Date { get; set; }
     public long Clicks { get; set; }
     public long Impressions { get; set; }
     public double Ctr { get; set; }

@@ -138,18 +138,37 @@ public class SitesController : ControllerBase
         return Ok(new { newlyAdded = result.Value });
     }
 
+    private async Task<Guid?> ResolveSiteIdAsync(Guid userId, string id)
+    {
+        if (Guid.TryParse(id, out var siteGuid))
+        {
+            return siteGuid;
+        }
+
+        // Fallback: search by PropertyId
+        var site = await _syncSiteDataHandler.GetSiteByPropertyIdAsync(userId, id);
+        return site?.Id;
+    }
+
     /// <summary>
     /// Оновити теги сайту
     /// PUT /api/sites/{id}/tags
     /// </summary>
     [HttpPut("{id}/tags")]
-    public async Task<IActionResult> UpdateSiteTags(Guid id, [FromBody] UpdateSiteTagsRequest request)
+    public async Task<IActionResult> UpdateSiteTags(string id, [FromBody] UpdateSiteTagsRequest request)
     {
         var userId = GetUserId();
+        var siteId = await ResolveSiteIdAsync(userId, id);
+        
+        if (siteId == null)
+        {
+            return BadRequest(new { error = "Site not found" });
+        }
+
         var command = new UpdateSiteTagsCommand
         {
             UserId = userId,
-            SiteId = id,
+            SiteId = siteId.Value,
             TagIds = request.TagIds
         };
 
@@ -168,13 +187,20 @@ public class SitesController : ControllerBase
     /// PUT /api/sites/{id}/favorite
     /// </summary>
     [HttpPut("{id}/favorite")]
-    public async Task<IActionResult> ToggleFavorite(Guid id, [FromBody] ToggleFavoriteRequest request)
+    public async Task<IActionResult> ToggleFavorite(string id, [FromBody] ToggleFavoriteRequest request)
     {
         var userId = GetUserId();
+        var siteId = await ResolveSiteIdAsync(userId, id);
+
+        if (siteId == null)
+        {
+            return BadRequest(new { error = "Site not found" });
+        }
+
         var command = new ToggleFavoriteCommand
         {
             UserId = userId,
-            SiteId = id,
+            SiteId = siteId.Value,
             IsFavorite = request.IsFavorite
         };
 
@@ -193,13 +219,20 @@ public class SitesController : ControllerBase
     /// POST /api/sites/{id}/sync
     /// </summary>
     [HttpPost("{id}/sync")]
-    public async Task<IActionResult> SyncSiteData(Guid id, [FromBody] SyncSiteDataRequest request)
+    public async Task<IActionResult> SyncSiteData(string id, [FromBody] SyncSiteDataRequest request)
     {
         var userId = GetUserId();
+        var siteId = await ResolveSiteIdAsync(userId, id);
+
+        if (siteId == null)
+        {
+            return BadRequest(new { error = "Site not found" });
+        }
+
         var command = new SyncSiteDataCommand
         {
             UserId = userId,
-            SiteId = id,
+            SiteId = siteId.Value,
             StartDate = request.StartDate,
             EndDate = request.EndDate
         };
@@ -223,16 +256,23 @@ public class SitesController : ControllerBase
     /// </summary>
     [HttpGet("{id}/export")]
     public async Task<IActionResult> ExportSiteData(
-        Guid id,
-        [FromQuery] DateOnly dateFrom,
-        [FromQuery] DateOnly dateTo,
+        string id,
+        [FromQuery] DateTime dateFrom,
+        [FromQuery] DateTime dateTo,
         [FromQuery] string format = "csv")
     {
         var userId = GetUserId();
+        var siteId = await ResolveSiteIdAsync(userId, id);
+
+        if (siteId == null)
+        {
+            return BadRequest(new { error = "Site not found" });
+        }
+
         var query = new ExportSiteDataQuery
         {
             UserId = userId,
-            SiteId = id,
+            SiteId = siteId.Value,
             DateFrom = dateFrom,
             DateTo = dateTo
         };
@@ -283,4 +323,4 @@ public class SitesController : ControllerBase
 
 public record UpdateSiteTagsRequest(List<Guid> TagIds);
 public record ToggleFavoriteRequest(bool IsFavorite);
-public record SyncSiteDataRequest(DateOnly StartDate, DateOnly EndDate);
+public record SyncSiteDataRequest(DateTime StartDate, DateTime EndDate);

@@ -116,7 +116,7 @@ public static class DatabaseSeeder
         var metrics = new List<SiteMetric>();
         for (int i = 6; i >= 0; i--)
         {
-            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-i));
+            var date = DateTime.UtcNow.AddDays(-i).Date;
             metrics.Add(new SiteMetric
             {
                 Id = Guid.NewGuid(),
