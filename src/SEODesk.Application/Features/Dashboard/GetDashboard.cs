@@ -12,10 +12,10 @@ public class GetDashboardQuery
     public Guid UserId { get; set; }
     public Guid? GroupId { get; set; }
     public Guid? TagId { get; set; }
-    public DateTime DateFrom { get; set; }
-    public DateTime DateTo { get; set; }
-    public DateTime? CompareFrom { get; set; }
-    public DateTime? CompareTo { get; set; }
+    public DateOnly DateFrom { get; set; }
+    public DateOnly DateTo { get; set; }
+    public DateOnly? CompareFrom { get; set; }
+    public DateOnly? CompareTo { get; set; }
     public string SortBy { get; set; } = "clicks";
     public string SortDir { get; set; } = "desc";
 }
@@ -138,7 +138,7 @@ public class GetDashboardHandler
                 IsFavorite = site.IsFavorite,
                 LastSynced = site.LastSyncedAt,
                 SyncError = site.SyncError,
-                Tags = site.SiteTags.Select(st => st.Tag.Name).ToList(),
+                Tags = site.SiteTags.Select(st => st.TagId.ToString()).ToList(),
                 Totals = CalculateTotals(siteMetrics),
                 TimeSeries = siteMetrics
                     .OrderBy(m => m.Date)

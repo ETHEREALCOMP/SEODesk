@@ -25,17 +25,17 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetDashboard(
         [FromQuery] Guid? groupId,
         [FromQuery] Guid? tagId,
-        [FromQuery] DateTime? dateFrom,
-        [FromQuery] DateTime? dateTo,
-        [FromQuery] DateTime? compareFrom,
-        [FromQuery] DateTime? compareTo,
+        [FromQuery] DateOnly? dateFrom,
+        [FromQuery] DateOnly? dateTo,
+        [FromQuery] DateOnly? compareFrom,
+        [FromQuery] DateOnly? compareTo,
         [FromQuery] string sortBy = "clicks",
         [FromQuery] string sortDir = "desc")
     {
         var userId = GetUserId();
 
         // Якщо немає дат - використати дефолтні (останні 28 днів)
-        var endDate = dateTo ?? DateTime.UtcNow;
+        var endDate = dateTo ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var startDate = dateFrom ?? endDate.AddDays(-28);
 
         var query = new GetDashboardQuery

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using SEODesk.API.Data;
 using SEODesk.API.Middleware;
 using SEODesk.Application.Features.Dashboard;
 using SEODesk.Application.Features.Groups;
@@ -230,5 +231,12 @@ app.MapGet("/health", () => Results.Ok(new
     status = "healthy",
     timestamp = DateTime.UtcNow
 }));
+
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await DatabaseSeeder.SeedAsync(dbContext);
+}
 
 app.Run();

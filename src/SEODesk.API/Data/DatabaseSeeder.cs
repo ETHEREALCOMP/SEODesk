@@ -116,7 +116,7 @@ public static class DatabaseSeeder
         var metrics = new List<SiteMetric>();
         for (int i = 6; i >= 0; i--)
         {
-            var date = DateTime.UtcNow.AddDays(-i).Date;
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-i));
             metrics.Add(new SiteMetric
             {
                 Id = Guid.NewGuid(),
@@ -136,7 +136,7 @@ public static class DatabaseSeeder
         // Створюємо preferences
         var preferences = new UserPreference
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid(),         
             UserId = testUser.Id,
             SelectedMetrics = "clicks,impressions",
             LastRangePreset = "last28days",
@@ -145,7 +145,7 @@ public static class DatabaseSeeder
 
         context.UserPreferences.Add(preferences);
 
-        // Зберігаємо всі зміни
+        // Зберігаємо всі зміни                                 
         await context.SaveChangesAsync();
     }
 }

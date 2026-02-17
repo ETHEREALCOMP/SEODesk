@@ -257,8 +257,8 @@ public class SitesController : ControllerBase
     [HttpGet("{id}/export")]
     public async Task<IActionResult> ExportSiteData(
         string id,
-        [FromQuery] DateTime dateFrom,
-        [FromQuery] DateTime dateTo,
+        [FromQuery] DateOnly dateFrom,
+        [FromQuery] DateOnly dateTo,
         [FromQuery] string format = "csv")
     {
         var userId = GetUserId();
@@ -323,4 +323,4 @@ public class SitesController : ControllerBase
 
 public record UpdateSiteTagsRequest(List<Guid> TagIds);
 public record ToggleFavoriteRequest(bool IsFavorite);
-public record SyncSiteDataRequest(DateTime StartDate, DateTime EndDate);
+public record SyncSiteDataRequest(DateOnly StartDate, DateOnly EndDate);

@@ -60,7 +60,7 @@ public class SiteMetric
 {
     public Guid Id { get; set; }
     public Guid SiteId { get; set; }
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
     public long Clicks { get; set; }
     public long Impressions { get; set; }
     public double Ctr { get; set; }
