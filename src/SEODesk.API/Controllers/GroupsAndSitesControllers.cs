@@ -1,7 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEODesk.Application.Features.Groups;
+using SEODesk.Application.Features.Groups.Commands;
+using SEODesk.Application.Features.Groups.Handlers;
+using SEODesk.Application.Features.Groups.Queries;
 using SEODesk.Application.Features.Sites;
+using SEODesk.Application.Features.Sites.Commands;
+using SEODesk.Application.Features.Sites.Handlers;
+using SEODesk.Application.Features.Sites.Queries;
 using System.Security.Claims;
 using System.Text;
 
@@ -125,10 +131,7 @@ public class SitesController : ControllerBase
         var userId = GetUserId();
         var command = new DiscoverSitesCommand { UserId = userId };
 
-        var clientId = _configuration["Google:ClientId"] ?? throw new InvalidOperationException("Google ClientId not configured");
-        var clientSecret = _configuration["Google:ClientSecret"] ?? throw new InvalidOperationException("Google ClientSecret not configured");
-
-        var result = await _discoverSitesHandler.HandleAsync(command, clientId, clientSecret);
+        var result = await _discoverSitesHandler.HandleAsync(command);
 
         if (!result.IsSuccess)
         {

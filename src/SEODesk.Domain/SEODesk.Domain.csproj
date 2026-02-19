@@ -6,4 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Google.Apis.SearchConsole.v1" Version="1.70.0.3847" />
+  </ItemGroup>
+
 </Project>

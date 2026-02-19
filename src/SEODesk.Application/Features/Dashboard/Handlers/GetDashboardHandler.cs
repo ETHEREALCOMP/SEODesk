@@ -1,69 +1,18 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SEODesk.Application.Common;
+using SEODesk.Application.Features.Dashboard.Commands;
+using SEODesk.Application.Features.Dashboard.Queries;
+using SEODesk.Application.Features.Dashboard.Response;
+using SEODesk.Application.Features.Sites.Commands;
+using SEODesk.Application.Features.Sites.Handlers;
 using SEODesk.Infrastructure.Data;
 
-namespace SEODesk.Application.Features.Dashboard;
+namespace SEODesk.Application.Features.Dashboard.Handlers;
 
-/// <summary>
-/// Query для отримання даних Dashboard
-/// </summary>
-public class GetDashboardQuery
+public sealed class GetDashboardHandler(ApplicationDbContext _dbContext,
+    DiscoverSitesHandler _discoverSitesHandler, IConfiguration _configuration)
 {
-    public Guid UserId { get; set; }
-    public Guid? GroupId { get; set; }
-    public Guid? TagId { get; set; }
-    public DateOnly DateFrom { get; set; }
-    public DateOnly DateTo { get; set; }
-    public DateOnly? CompareFrom { get; set; }
-    public DateOnly? CompareTo { get; set; }
-    public string SortBy { get; set; } = "clicks";
-    public string SortDir { get; set; } = "desc";
-}
-
-/// <summary>
-/// Response з даними Dashboard
-/// </summary>
-public class GetDashboardResponse
-{
-    public MetricDto Summary { get; set; } = new();
-    public List<TimeSeriesPointDto> TimeSeries { get; set; } = new();
-    public List<SiteDto> Sites { get; set; } = new();
-    public int TotalUserSites { get; set; }
-}
-
-public class SiteDto
-{
-    public Guid Id { get; set; }
-    public string PropertyId { get; set; } = string.Empty;
-    public string Domain { get; set; } = string.Empty;
-    public MetricDto Totals { get; set; } = new();
-    public List<TimeSeriesPointDto> TimeSeries { get; set; } = new();
-    public List<string> Tags { get; set; } = new();
-    public bool IsFavorite { get; set; }
-    public DateTime? LastSynced { get; set; }
-    public string? SyncError { get; set; }
-}
-
-/// <summary>
-/// Handler для GetDashboard Query
-/// Vertical Slice: вся логіка в одному місці
-/// </summary>
-public class GetDashboardHandler
-{
-    private readonly ApplicationDbContext _dbContext;
-    private readonly Sites.DiscoverSitesHandler _discoverSitesHandler;
-    private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
-
-    public GetDashboardHandler(
-        ApplicationDbContext dbContext,
-        Sites.DiscoverSitesHandler discoverSitesHandler,
-        Microsoft.Extensions.Configuration.IConfiguration configuration)
-    {
-        _dbContext = dbContext;
-        _discoverSitesHandler = discoverSitesHandler;
-        _configuration = configuration;
-    }
-
     public async Task<Result<GetDashboardResponse>> HandleAsync(GetDashboardQuery query)
     {
         // 1. Отримуємо сайти користувача з фільтрацією
@@ -79,15 +28,12 @@ public class GetDashboardHandler
         {
             var clientId = _configuration["Google:ClientId"];
             var clientSecret = _configuration["Google:ClientSecret"];
-            
+
             if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
             {
                 await _discoverSitesHandler.HandleAsync(
-                    new Sites.DiscoverSitesCommand { UserId = query.UserId },
-                    clientId,
-                    clientSecret
-                );
-                
+                    new DiscoverSitesCommand { UserId = query.UserId });
+
                 // Перезапитуємо сайти
                 sites = await sitesQuery.ToListAsync();
             }
@@ -109,7 +55,7 @@ public class GetDashboardHandler
 
         if (sites.Count == 0 && totalUserSitesCount > 0)
         {
-             return Result<GetDashboardResponse>.Success(new GetDashboardResponse { TotalUserSites = totalUserSitesCount });
+            return Result<GetDashboardResponse>.Success(new GetDashboardResponse { TotalUserSites = totalUserSitesCount });
         }
 
         if (sites.Count == 0)
@@ -129,8 +75,8 @@ public class GetDashboardHandler
         var siteDtos = sites.Select(site =>
         {
             var siteMetrics = metrics.Where(m => m.SiteId == site.Id).ToList();
-            
-            return new SiteDto
+
+            return new SiteCommand
             {
                 Id = site.Id,
                 PropertyId = site.PropertyId,
@@ -201,7 +147,7 @@ public class GetDashboardHandler
     /// <summary>
     /// Сортування сайтів
     /// </summary>
-    private List<SiteDto> SortSites(List<SiteDto> sites, string sortBy, string sortDir)
+    private List<SiteCommand> SortSites(List<SiteCommand> sites, string sortBy, string sortDir)
     {
         var sorted = sortBy.ToLower() switch
         {
@@ -211,15 +157,15 @@ public class GetDashboardHandler
             _ => sites.OrderBy(s => s.Totals.Clicks)
         };
 
-        return sortDir.ToLower() == "desc" 
-            ? sorted.Reverse().ToList() 
+        return sortDir.ToLower() == "desc"
+            ? sorted.Reverse().ToList()
             : sorted.ToList();
     }
 
     /// <summary>
     /// Розрахунок загальних метрик
     /// </summary>
-    private MetricDto CalculateSummary(List<SiteDto> sites)
+    private MetricDto CalculateSummary(List<SiteCommand> sites)
     {
         var totalClicks = sites.Sum(s => s.Totals.Clicks);
         var totalImpressions = sites.Sum(s => s.Totals.Impressions);
@@ -239,7 +185,7 @@ public class GetDashboardHandler
     /// <summary>
     /// Агрегація time series по всіх сайтах
     /// </summary>
-    private List<TimeSeriesPointDto> AggregateTimeSeries(List<SiteDto> sites)
+    private List<TimeSeriesPointDto> AggregateTimeSeries(List<SiteCommand> sites)
     {
         var dateGroups = sites
             .SelectMany(s => s.TimeSeries)

@@ -1,3 +1,5 @@
+using SEODesk.Domain.Enums;
+
 namespace SEODesk.Domain.Entities;
 
 public class User
@@ -21,11 +23,4 @@ public class User
     public List<Tag> Tags { get; set; } = new();
     public List<Site> Sites { get; set; } = new();
     public UserPreference? Preferences { get; set; }
-}
-
-public enum PlanType
-{
-    FREE = 0,
-    TRIAL = 1,
-    PRO = 2
 }

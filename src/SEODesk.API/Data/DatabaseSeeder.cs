@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SEODesk.Domain.Entities;
+using SEODesk.Domain.Enums;
 using SEODesk.Infrastructure.Data;
 
 namespace SEODesk.API.Data;
@@ -149,13 +150,3 @@ public static class DatabaseSeeder
         await context.SaveChangesAsync();
     }
 }
-
-// Додайте в Program.cs перед app.Run():
-/*
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await DatabaseSeeder.SeedAsync(dbContext);
-}
-*/

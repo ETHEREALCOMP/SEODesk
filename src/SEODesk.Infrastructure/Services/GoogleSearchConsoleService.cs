@@ -1,157 +1,190 @@
-using Google.Apis.Auth.OAuth2;
-using Google.Apis.Auth.OAuth2.Flows;
-using Google.Apis.SearchConsole.v1;
 using Google.Apis.SearchConsole.v1.Data;
-using Google.Apis.Services;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using SEODesk.Infrastructure.Services.Interfaces;
 
 namespace SEODesk.Infrastructure.Services;
 
 /// <summary>
 /// Service для роботи з Google Search Console API
 /// </summary>
-public class GoogleSearchConsoleService
+public sealed class GoogleSearchConsoleService(
+    IGoogleAuthService _authService,
+    IMemoryCache _cache,
+    ILogger<GoogleSearchConsoleService> _logger) : IGoogleSearchConsoleService
 {
-    /// <summary>
-    /// Створює сервіс GSC з refresh token користувача
-    /// </summary>
-    public SearchConsoleService CreateService(string refreshToken, string clientId, string clientSecret)
+    private const int RowLimit = 25000;
+
+    public async Task<List<string>> GetUserSitesAsync(string refreshToken)
     {
-        var credential = new UserCredential(
-            new GoogleAuthorizationCodeFlow(
-                new GoogleAuthorizationCodeFlow.Initializer
-                {
-                    ClientSecrets = new ClientSecrets
-                    {
-                        ClientId = clientId,
-                        ClientSecret = clientSecret
-                    }
-                }),
-            "user",
-            new Google.Apis.Auth.OAuth2.Responses.TokenResponse
-            {
-                RefreshToken = refreshToken
-            });
+        ArgumentException.ThrowIfNullOrEmpty(refreshToken);
 
-        return new SearchConsoleService(new BaseClientService.Initializer
+        var cacheKey = $"sites:{refreshToken.GetHashCode()}";
+
+        if (_cache.TryGetValue(cacheKey, out List<string>? cached))
         {
-            HttpClientInitializer = credential,
-            ApplicationName = "SEODesk"
-        });
-    }
-
-    /// <summary>
-    /// Отримує список сайтів користувача з GSC
-    /// </summary>
-    public async Task<List<string>> GetUserSitesAsync(SearchConsoleService service)
-    {
-        var request = service.Sites.List();
-        var response = await request.ExecuteAsync();
-        
-        return response.SiteEntry?
-            .Select(site => site.SiteUrl)
-            .ToList() ?? new List<string>();
-    }
-
-    /// <summary>
-    /// Отримує метрики для сайту за період
-    /// </summary>
-    public async Task<List<MetricData>> GetSiteMetricsAsync(
-        SearchConsoleService service,
-        string siteUrl,
-        DateOnly startDate,
-        DateOnly endDate)
-    {
-        var request = new SearchAnalyticsQueryRequest
-        {
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
-            Dimensions = new[] { "date" },
-            RowLimit = 25000
-        };
-
-        var response = await service.Searchanalytics
-            .Query(request, siteUrl)
-            .ExecuteAsync();
-
-        if (response.Rows == null || response.Rows.Count == 0)
-        {
-            return new List<MetricData>();
+            _logger.LogDebug("Sites returned from cache");
+            return FilterDuplicateDomains(cached!);
         }
 
-        return response.Rows.Select(row => new MetricData
+        var service = _authService.CreateService(refreshToken);
+        var response = await ExecuteWithRetryAsync(() =>
+            service.Sites.List().ExecuteAsync());
+
+        var sites = response.SiteEntry?
+            .Select(s => s.SiteUrl)
+            .ToList() ?? new List<string>();
+
+        _logger.LogInformation("Fetched {Count} sites from GSC", sites.Count);
+        _cache.Set(cacheKey, sites, TimeSpan.FromMinutes(10));
+
+        return FilterDuplicateDomains(sites);
+    }
+
+    public async Task<List<MetricData>> GetSiteMetricsAsync(
+        string refreshToken, string siteUrl, DateOnly startDate, DateOnly endDate)
+    {
+        ValidateArgs(refreshToken, siteUrl, startDate, endDate);
+
+        var rows = await FetchAnalyticsRowsAsync(
+            refreshToken, siteUrl, startDate, endDate, ["date"]);
+
+        return rows.Select(r => new MetricData
         {
-            Date = DateOnly.Parse(row.Keys[0]),
-            Clicks = (long)(row.Clicks ?? 0),
-            Impressions = (long)(row.Impressions ?? 0),
-            Ctr = row.Ctr ?? 0,
-            AvgPosition = row.Position ?? 0
+            Date = DateOnly.Parse(r.Keys[0]),
+            Clicks = (long)(r.Clicks ?? 0),
+            Impressions = (long)(r.Impressions ?? 0),
+            Ctr = r.Ctr ?? 0,
+            AvgPosition = r.Position ?? 0
         }).ToList();
     }
 
-    /// <summary>
-    /// Отримує кількість унікальних keywords за період
-    /// </summary>
     public async Task<int> GetKeywordsCountAsync(
-        SearchConsoleService service,
-        string siteUrl,
-        DateOnly startDate,
-        DateOnly endDate)
+        string refreshToken, string siteUrl, DateOnly startDate, DateOnly endDate)
     {
-        var request = new SearchAnalyticsQueryRequest
-        {
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
-            Dimensions = new[] { "query" },
-            RowLimit = 25000
-        };
+        ValidateArgs(refreshToken, siteUrl, startDate, endDate);
 
-        var response = await service.Searchanalytics
-            .Query(request, siteUrl)
-            .ExecuteAsync();
+        var rows = await FetchAnalyticsRowsAsync(
+            refreshToken, siteUrl, startDate, endDate, ["query"]);
 
-        return response.Rows?.Count ?? 0;
+        return rows.Count;
     }
 
-    /// <summary>
-    /// Отримує кількість keywords по датах (для time series)
-    /// </summary>
     public async Task<Dictionary<DateOnly, int>> GetKeywordsCountByDateAsync(
-        SearchConsoleService service,
-        string siteUrl,
-        DateOnly startDate,
-        DateOnly endDate)
+        string refreshToken, string siteUrl, DateOnly startDate, DateOnly endDate)
     {
-        var request = new SearchAnalyticsQueryRequest
-        {
-            StartDate = startDate.ToString("yyyy-MM-dd"),
-            EndDate = endDate.ToString("yyyy-MM-dd"),
-            Dimensions = new[] { "date", "query" },
-            RowLimit = 25000
-        };
+        ValidateArgs(refreshToken, siteUrl, startDate, endDate);
 
-        var response = await service.Searchanalytics
-            .Query(request, siteUrl)
-            .ExecuteAsync();
+        var rows = await FetchAnalyticsRowsAsync(
+            refreshToken, siteUrl, startDate, endDate, ["date", "query"]);
 
-        if (response.Rows == null)
+        return rows
+            .GroupBy(r => DateOnly.Parse(r.Keys[0]))
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    private async Task<List<ApiDataRow>> FetchAnalyticsRowsAsync(
+        string refreshToken, string siteUrl,
+        DateOnly startDate, DateOnly endDate, string[] dimensions)
+    {
+        var service = _authService.CreateService(refreshToken);
+        var allRows = new List<ApiDataRow>();
+        int startRow = 0;
+
+        while (true)
         {
-            return new Dictionary<DateOnly, int>();
+            var request = new SearchAnalyticsQueryRequest
+            {
+                StartDate = startDate.ToString("yyyy-MM-dd"),
+                EndDate = endDate.ToString("yyyy-MM-dd"),
+                Dimensions = dimensions,
+                RowLimit = RowLimit,
+                StartRow = startRow
+            };
+
+            var response = await ExecuteWithRetryAsync(() =>
+                service.Searchanalytics.Query(request, siteUrl).ExecuteAsync());
+
+            if (response.Rows == null || response.Rows.Count == 0)
+                break;
+
+            allRows.AddRange(response.Rows);
+
+            _logger.LogDebug("Fetched rows {Start}-{End} for {Site}",
+                startRow, startRow + response.Rows.Count, siteUrl);
+
+            if (response.Rows.Count < RowLimit)
+                break;
+
+            startRow += RowLimit;
         }
 
-        return response.Rows
-            .GroupBy(row => DateOnly.Parse(row.Keys[0]))
-            .ToDictionary(
-                group => group.Key,
-                group => group.Count()
-            );
+        _logger.LogInformation("Total rows fetched: {Count} for {Site}", allRows.Count, siteUrl);
+        return allRows;
     }
-}
 
-public class MetricData
-{
-    public DateOnly Date { get; set; }
-    public long Clicks { get; set; }
-    public long Impressions { get; set; }
-    public double Ctr { get; set; }
-    public double AvgPosition { get; set; }
+    private async Task<T> ExecuteWithRetryAsync<T>(Func<Task<T>> action)
+    {
+        int attempt = 0;
+        int[] delays = [1000, 2000, 5000];
+
+        while (true)
+        {
+            try
+            {
+                return await action();
+            }
+            catch (Google.GoogleApiException ex) when (
+                ex.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests ||
+                ex.HttpStatusCode == System.Net.HttpStatusCode.InternalServerError)
+            {
+                if (attempt >= delays.Length)
+                {
+                    _logger.LogError(ex, "GSC API failed after {Attempts} attempts", attempt);
+                    throw;
+                }
+
+                _logger.LogWarning("GSC API returned {Status}, retry {Attempt} after {Delay}ms",
+                    ex.HttpStatusCode, attempt + 1, delays[attempt]);
+
+                await Task.Delay(delays[attempt]);
+                attempt++;
+            }
+        }
+    }
+
+    private static void ValidateArgs(string refreshToken, string siteUrl,
+        DateOnly startDate, DateOnly endDate)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(refreshToken);
+        ArgumentException.ThrowIfNullOrEmpty(siteUrl);
+
+        if (startDate > endDate)
+            throw new ArgumentException($"startDate {startDate} cannot be after endDate {endDate}");
+    }
+
+    private static List<string> FilterDuplicateDomains(List<string> sites)
+    {
+        var domainProperties = sites
+            .Where(s => s.StartsWith("sc-domain:"))
+            .Select(s => s.Replace("sc-domain:", "").TrimEnd('/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var filteredUrls = sites
+            .Where(s => !s.StartsWith("sc-domain:"))
+            .Where(s =>
+            {
+                if (Uri.TryCreate(s, UriKind.Absolute, out var uri))
+                    return !domainProperties.Any(d =>
+                        uri.Host.Equals(d, StringComparison.OrdinalIgnoreCase) ||
+                        uri.Host.Equals("www." + d, StringComparison.OrdinalIgnoreCase) ||
+                        uri.Host.EndsWith("." + d, StringComparison.OrdinalIgnoreCase));
+                return true;
+            }).ToList();
+
+        return sites
+            .Where(s => s.StartsWith("sc-domain:"))
+            .Concat(filteredUrls)
+            .ToList();
+    }
 }

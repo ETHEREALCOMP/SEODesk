@@ -11,6 +11,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using SEODesk.Application.Features.Sites.Handlers;
+using SEODesk.Application.Features.Sites.Commands;
+using SEODesk.Domain.Enums;
 
 namespace SEODesk.API.Controllers;
 
@@ -20,12 +23,12 @@ public class AuthController : ControllerBase
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IConfiguration _configuration;
-    private readonly Application.Features.Sites.DiscoverSitesHandler _discoverSitesHandler;
+    private readonly DiscoverSitesHandler _discoverSitesHandler;
 
     public AuthController(
         ApplicationDbContext dbContext,
         IConfiguration configuration,
-        Application.Features.Sites.DiscoverSitesHandler discoverSitesHandler)
+        DiscoverSitesHandler discoverSitesHandler)
     {
         _dbContext = dbContext;
         _configuration = configuration;
@@ -152,8 +155,6 @@ public class AuthController : ControllerBase
 
             var services = HttpContext.RequestServices;
             var userId = user.Id;
-            var googleClientId = _configuration["Google:ClientId"]!;
-            var googleClientSecret = _configuration["Google:ClientSecret"]!;
             var userRefreshToken = user.GoogleRefreshToken;
 
             if (!string.IsNullOrEmpty(userRefreshToken))
@@ -164,12 +165,10 @@ public class AuthController : ControllerBase
                     {
                         using var scope = services.CreateScope(); // ✅ Використати збережений
                         var handler = scope.ServiceProvider
-                            .GetRequiredService<Application.Features.Sites.DiscoverSitesHandler>();
+                            .GetRequiredService<DiscoverSitesHandler>();
 
                         await handler.HandleAsync(
-                            new Application.Features.Sites.DiscoverSitesCommand { UserId = userId },
-                            googleClientId,
-                            googleClientSecret
+                            new DiscoverSitesCommand { UserId = userId }
                         );
                         Console.WriteLine("✅ Sites discovered");
                     }

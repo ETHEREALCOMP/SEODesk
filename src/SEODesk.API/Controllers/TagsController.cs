@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEODesk.Application.Features.Tags;
+using SEODesk.Application.Features.Tags.Commands;
+using SEODesk.Application.Features.Tags.Handlers;
+using SEODesk.Application.Features.Tags.Queries;
 using System.Security.Claims;
 
 namespace SEODesk.API.Controllers;

@@ -7,17 +7,30 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SEODesk.API.Data;
-using SEODesk.API.Middleware;
 using SEODesk.Application.Features.Dashboard;
+using SEODesk.Application.Features.Dashboard.Handlers;
 using SEODesk.Application.Features.Groups;
+using SEODesk.Application.Features.Groups.Handlers;
 using SEODesk.Application.Features.Sites;
+using SEODesk.Application.Features.Sites.Handlers;
 using SEODesk.Application.Features.Tags;
+using SEODesk.Application.Features.Tags.Handlers;
 using SEODesk.Application.Features.Users;
+using SEODesk.Application.Features.Users.Handlers;
+using SEODesk.Infrastructure;
 using SEODesk.Infrastructure.Data;
+using SEODesk.Infrastructure.Options;
 using SEODesk.Infrastructure.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.AddOptions<GoogleSearchConsoleOptions>()
+    .BindConfiguration(GoogleSearchConsoleOptions.SectionName)
+    .ValidateOnStart();
+
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -27,7 +40,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     
     // Explicitly use the namespace to avoid ambiguity with System.Net.IPNetwork in .NET 8+
     options.KnownProxies.Clear();
-    options.KnownNetworks.Clear();
 });
 
 if (builder.Environment.IsDevelopment())
@@ -80,15 +92,15 @@ builder.Services.AddCors(options =>
     });
 });
 
-var googleClientId = builder.Configuration["Google:ClientId"];
-var googleClientSecret = builder.Configuration["Google:ClientSecret"];
+var googleClientId = builder.Configuration["GoogleSearchConsole:ClientId"];
+var googleClientSecret = builder.Configuration["GoogleSearchConsole:ClientSecret"];
 
 if (string.IsNullOrWhiteSpace(googleClientId) || string.IsNullOrWhiteSpace(googleClientSecret))
 {
-    var envClient = Environment.GetEnvironmentVariable("Google__ClientId")
-                    ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
-    var envSecret = Environment.GetEnvironmentVariable("Google__ClientSecret")
-                    ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+    var envClient = Environment.GetEnvironmentVariable("GoogleSearchConsole__ClientId")
+                    ?? Environment.GetEnvironmentVariable("GOOGLESEARCHCONSOLE_CLIENT_ID");
+    var envSecret = Environment.GetEnvironmentVariable("GoogleSearchConsole__ClientSecret")
+                    ?? Environment.GetEnvironmentVariable("GOOGLESEARCHCONSOLE_SECRET");
 
     if (!string.IsNullOrWhiteSpace(envClient) && !string.IsNullOrWhiteSpace(envSecret))
     {

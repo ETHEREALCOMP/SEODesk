@@ -1,30 +1,16 @@
-using Microsoft.EntityFrameworkCore;
-using SEODesk.Application.Common;
+﻿using SEODesk.Application.Common;
+using SEODesk.Application.Features.Sites.Commands;
 using SEODesk.Domain.Entities;
 using SEODesk.Infrastructure.Data;
-using SEODesk.Infrastructure.Services;
+using SEODesk.Infrastructure.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
-namespace SEODesk.Application.Features.Sites;
+namespace SEODesk.Application.Features.Sites.Handlers;
 
-public class DiscoverSitesCommand
+public class DiscoverSitesHandler(ApplicationDbContext _dbContext,
+    IGoogleSearchConsoleService _gscService, IGoogleAuthService _googleAuth)
 {
-    public Guid UserId { get; set; }
-}
-
-public class DiscoverSitesHandler
-{
-    private readonly ApplicationDbContext _dbContext;
-    private readonly GoogleSearchConsoleService _gscService;
-
-    public DiscoverSitesHandler(
-        ApplicationDbContext dbContext,
-        GoogleSearchConsoleService gscService)
-    {
-        _dbContext = dbContext;
-        _gscService = gscService;
-    }
-
-    public async Task<Result<int>> HandleAsync(DiscoverSitesCommand command, string clientId, string clientSecret)
+    public async Task<Result<int>> HandleAsync(DiscoverSitesCommand command)
     {
         var user = await _dbContext.Users
             .Include(u => u.Groups)
@@ -37,8 +23,8 @@ public class DiscoverSitesHandler
 
         try
         {
-            var gscService = _gscService.CreateService(user.GoogleRefreshToken, clientId, clientSecret);
-            var remoteSites = await _gscService.GetUserSitesAsync(gscService);
+            var gscService = _googleAuth.CreateService(user.GoogleRefreshToken);
+            var remoteSites = await _gscService.GetUserSitesAsync(user.GoogleRefreshToken);
 
             if (remoteSites.Count == 0)
             {
@@ -50,7 +36,7 @@ public class DiscoverSitesHandler
                 .Select(s => s.PropertyId)
                 .ToListAsync();
 
-            var defaultGroup = user.Groups.FirstOrDefault(g => g.IsDefault) 
+            var defaultGroup = user.Groups.FirstOrDefault(g => g.IsDefault)
                              ?? user.Groups.First();
 
             int newlyAdded = 0;
@@ -60,7 +46,7 @@ public class DiscoverSitesHandler
                 if (!localSites.Contains(siteUrl))
                 {
                     var domain = new Uri(siteUrl).Host;
-                    
+
                     _dbContext.Sites.Add(new Site
                     {
                         Id = Guid.NewGuid(),

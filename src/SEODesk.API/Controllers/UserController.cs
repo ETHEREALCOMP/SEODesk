@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SEODesk.Application.Features.Users;
+using SEODesk.Application.Features.Users.Commands;
+using SEODesk.Application.Features.Users.Handlers;
+using SEODesk.Application.Features.Users.Queries;
 using System.Security.Claims;
 
 namespace SEODesk.API.Controllers;
