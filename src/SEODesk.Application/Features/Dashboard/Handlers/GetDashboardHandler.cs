@@ -26,8 +26,8 @@ public sealed class GetDashboardHandler(ApplicationDbContext _dbContext,
         // 🔥 Якщо сайтів 0 - пробуємо "підтягнути" їх автоматично
         if (sites.Count == 0)
         {
-            var clientId = _configuration["Google:ClientId"];
-            var clientSecret = _configuration["Google:ClientSecret"];
+            var clientId = _configuration["GoogleSearchConsole:ClientId"];
+            var clientSecret = _configuration["GoogleSearchConsole:ClientSecret"];
 
             if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
             {

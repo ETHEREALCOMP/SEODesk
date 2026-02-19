@@ -240,8 +240,10 @@ public class SitesController : ControllerBase
             EndDate = request.EndDate
         };
 
-        var clientId = _configuration["Google:ClientId"] ?? throw new InvalidOperationException("Google ClientId not configured");
-        var clientSecret = _configuration["Google:ClientSecret"] ?? throw new InvalidOperationException("Google ClientSecret not configured");
+        var clientId = _configuration["GoogleSearchConsole:ClientId"] 
+            ?? throw new InvalidOperationException("Google ClientId not configured");
+        var clientSecret = _configuration["GoogleSearchConsole:ClientSecret"] 
+            ?? throw new InvalidOperationException("Google ClientSecret not configured");
 
         var result = await _syncSiteDataHandler.HandleAsync(command, clientId, clientSecret);
 
